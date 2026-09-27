@@ -419,7 +419,16 @@ begin
 end $$;
 
 -- ---------- 前台（不需登入） ----------
-create or replace function public.public_board() returns jsonb
+-- 前台存取密碼：案件設定 public_passcode 有值時，要輸入正確密碼才看得到資料（測試期間用）
+drop function if exists public.public_board();
+drop function if exists public.verify_owner(text, text);
+
+create or replace function public.passcode_ok(p_code text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce(setting('public_passcode') #>> '{}', '') = '' or coalesce(setting('public_passcode') #>> '{}', '') = coalesce(p_code, '')
+$$;
+
+create or replace function public.board_data() returns jsonb
 language sql stable security definer set search_path = public as $$
   with claims as (
     select p.code, count(*) n from picks p left join owners o on o.no = p.owner_no
@@ -447,11 +456,22 @@ language sql stable security definer set search_path = public as $$
   )
 $$;
 
-create or replace function public.verify_owner(p_name text, p_id text) returns jsonb
+create or replace function public.public_board(p_code text default '') returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not passcode_ok(p_code) then
+    perform pg_sleep(0.3);
+    return jsonb_build_object('locked', true);
+  end if;
+  return board_data();
+end $$;
+
+create or replace function public.verify_owner(p_name text, p_id text, p_code text default '') returns jsonb
 language plpgsql volatile security definer set search_path = public as $$
 declare o owners%rowtype; res jsonb; docs jsonb; need int[]; in_group boolean;
 begin
   perform pg_sleep(0.4);  -- 減緩連續猜測
+  if not passcode_ok(p_code) then return null; end if;
   select * into o from owners where name = trim(p_name) and id_no <> '' and upper(id_no) = upper(trim(p_id)) limit 1;
   if not found then return null; end if;
   in_group := exists (select 1 from merge_members where owner_no = o.no);
@@ -484,7 +504,8 @@ revoke all on function public.save_owner(jsonb), public.update_owner_info(jsonb)
   public.lottery_win(text,int,int), public.set_doc(int,int,int,text,text,text) from public, anon;
 grant execute on function public.save_owner(jsonb), public.update_owner_info(jsonb), public.save_group(jsonb), public.delete_group(int),
   public.lottery_win(text,int,int), public.set_doc(int,int,int,text,text,text), public.is_staff(), public.is_admin() to authenticated;
-grant execute on function public.public_board(), public.verify_owner(text,text) to anon, authenticated;
+revoke all on function public.board_data(), public.passcode_ok(text) from public, anon;
+grant execute on function public.public_board(text), public.verify_owner(text,text,text) to anon, authenticated;
 
 -- 即時同步（後台多人同時操作）
 do $$
@@ -523,5 +544,6 @@ insert into public.settings(key, value, is_public) values
   ('show_names',     'false', true),
   ('show_prices',    'false', true),
   ('show_plans',     'true', true),
-  ('refresh_sec',    '30', true)
+  ('refresh_sec',    '30', true),
+  ('public_passcode', '""', false)
 on conflict (key) do nothing;

@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive">
 <title>地主選屋資訊</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -121,11 +122,16 @@ dl.kv dt{color:var(--ink3)} dl.kv dd{margin:0;text-align:right;font-variant-nume
 .docs span.ok{background:var(--sel-bg);border-color:transparent;color:var(--sel)}
 .err{color:var(--dup)}
 .loading{padding:40px;text-align:center;color:var(--ink3)}
+.lock{position:fixed;inset:0;z-index:30;background:var(--paper);display:grid;place-items:center;padding:16px}
+.lock form{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:24px;width:100%;max-width:360px;display:grid;gap:12px}
+.lock h1{color:var(--ink);font-size:22px;margin:0}.lock p{margin:0;color:var(--ink2);font-size:15px}
+.lock input{font:inherit;font-size:17px;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
 footer{font-size:13px;color:var(--ink3);padding-block:0 32px}
 @media (max-width:820px){.hero-grid{grid-template-columns:1fr}.split{grid-template-columns:1fr}.panel{position:static}.lookup{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
+<div class="lock" id="lock" hidden><form id="lock-form"><h1>地主選屋資訊</h1><p>此頁面目前僅開放內部測試，請輸入存取密碼。</p><input id="lock-pw" type="password" autocomplete="off" aria-label="存取密碼" required><p class="err" id="lock-err" role="alert"></p><button class="btn primary" type="submit">進入</button></form></div>
 <div class="testbar" id="testbar" hidden>⚠️ 測試頁面：資料僅供測試，非正式選屋結果</div>
 <header class="hero">
   <div class="wrap">
@@ -304,9 +310,15 @@ function bind(){
 }
 document.querySelectorAll('#seg button').forEach(b=>b.onclick=()=>{st.v=b.dataset.v;render()});
 
+const PASS=()=>{try{return sessionStorage.getItem('xw_pass')||''}catch(e){return window._pass||''}};
+function showLock(msg){$('#lock').hidden=false;$('#lock-err').textContent=msg||'';$('#lock-pw').focus();}
+$('#lock-form').addEventListener('submit',async e=>{e.preventDefault();const v=$('#lock-pw').value;try{sessionStorage.setItem('xw_pass',v)}catch(_){window._pass=v}
+  const hadB=!!B;await load(true);if(!$('#lock').hidden)showLock('密碼不正確');else if(!hadB)startTimers();});
 async function load(first){
   try{
-    const b=await API('public_board');B=b;buildIndex();
+    const b=await API('public_board',{p_code:PASS()});
+    if(b&&b.locked){showLock();return}
+    $('#lock').hidden=true;B=b;buildIndex();
     if(first)renderHead();else{renderHead()}
     render();
     $('#dot').className='dot';$('#upd').textContent=`每 ${B.settings.refresh_sec||30} 秒自動更新 · 最後更新 ${new Date().toLocaleTimeString('zh-TW',{hour12:false})}`;
@@ -319,17 +331,20 @@ let timer;
 async function start(){
   try{PL=await fetch('plans/plans.json').then(r=>r.ok?r.json():null)}catch(e){PL=null}
   await load(true);
+  if(B)startTimers();
+}
+function startTimers(){
   clearInterval(timer);timer=setInterval(()=>{if(!document.hidden&&!document.querySelector('.plan-box:hover'))load()},(B&&B.settings.refresh_sec||30)*1000);
   setInterval(tick,60000);
 }
 $('#reload').onclick=()=>load();
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)load()});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&B)load()});
 
 $('#lk').addEventListener('submit',async e=>{
   e.preventDefault();
   const n=$('#lk-name').value.trim(),i=$('#lk-id').value.trim().toUpperCase(),r=$('#lk-res');
   $('#lk-btn').disabled=true;r.innerHTML='<p class="hint" style="margin:0">查詢中…</p>';
-  let o=null;try{o=await API('verify_owner',{p_name:n,p_id:i})}catch(err){r.innerHTML='<p class="err" style="margin:0">暫時無法連線，請稍後再試。</p>';$('#lk-btn').disabled=false;return}
+  let o=null;try{o=await API('verify_owner',{p_name:n,p_id:i,p_code:PASS()})}catch(err){r.innerHTML='<p class="err" style="margin:0">暫時無法連線，請稍後再試。</p>';$('#lk-btn').disabled=false;return}
   $('#lk-btn').disabled=false;
   const contact=B&&B.settings.contact?`，或致電 ${esc(B.settings.contact)} 洽詢`:'';
   if(!o){r.innerHTML=`<p class="err" style="margin:0">查不到符合的資料。請確認姓名與身分證字號是否正確${contact}。</p>`;return}

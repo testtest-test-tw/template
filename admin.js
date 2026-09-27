@@ -819,7 +819,8 @@ function vSettings() {
    <section><h2>文件</h2><div id="docs">${DOCS.map((d, i) => docRow(d, i)).join('')}</div><button class="btn sm" id="doc-add" style="justify-self:start">＋ 新增文件</button>
      <label class="f">Google Drive 上傳網址（Apps Script 部署網址）<input id="s-drive_script_url" value="${esc(s.drive_script_url)}" placeholder="https://script.google.com/macros/s/…/exec"></label>
      <p class="hint" style="margin:0">檔名格式：編號_姓名_文件名稱.pdf，存在 Drive 的「編號_姓名」資料夾。</p></section>
-   <section><h2>前台顯示</h2>${tg('s-show_names', '銷控表顯示選配人姓名', s.show_names)}${tg('s-show_prices', '顯示房屋與車位價格', s.show_prices)}${tg('s-show_plans', '顯示平面圖', s.show_plans !== false)}<label class="f">自動更新間隔（秒）<input id="s-refresh_sec" value="${s.refresh_sec || 30}" inputmode="numeric"></label></section>
+   <section><h2>前台顯示</h2>${tg('s-show_names', '銷控表顯示選配人姓名', s.show_names)}${tg('s-show_prices', '顯示房屋與車位價格', s.show_prices)}${tg('s-show_plans', '顯示平面圖', s.show_plans !== false)}<label class="f">自動更新間隔（秒）<input id="s-refresh_sec" value="${s.refresh_sec || 30}" inputmode="numeric"></label>
+     <label class="f">前台存取密碼（測試期間用；留空＝所有人都能看）<input id="s-public_passcode" value="${esc(s.public_passcode || '')}" autocomplete="off"></label></section>
    <section style="grid-column:1/-1"><h2>人員與權限</h2><div class="wrapx"><table class="list"><thead><tr><th>Email</th><th>姓名</th><th>角色</th><th></th></tr></thead><tbody>${STAFF.map(p => `<tr><td>${esc(p.email)}</td><td>${esc(p.name)}</td><td>${p.role === 'admin' ? '管理員' : '選屋人員'}</td><td class="r">${p.email.toLowerCase() === ME.email.toLowerCase() ? '<span class="sub">（你）</span>' : `<button class="btn sm" data-rm="${esc(p.email)}">移除</button>`}</td></tr>`).join('')}</tbody></table></div>
      <div class="row2"><label class="f">Email<input id="n-email" type="email"></label><label class="f">姓名<input id="n-name"></label></div><label class="f">角色${sel('n-role', 'staff', [['staff', '選屋人員（登錄選屋、上傳文件、記錄通話）'], ['admin', '管理員（另可改設定、匯入、刪除合併組、核准超選）']])}</label>
      <button class="btn" id="n-add" style="justify-self:start">＋ 加入人員</button>
@@ -850,12 +851,12 @@ async function saveSettings() {
     ['cap_ratio', Math.round(Number(v('cap')) * 10) / 1000], ['min_unit_value', Number(v('min_unit_value').replace(/,/g, '')) || 0], ['park_per_unit', Number(v('park_per_unit')) || 1],
     ['over_cap_mode', v('over_cap_mode')], ['dup_mode', v('dup_mode')], ['merge_cap_mode', v('merge_cap_mode')],
     ['docs', docs], ['drive_script_url', v('drive_script_url')],
-    ['show_names', c('show_names')], ['show_prices', c('show_prices')], ['show_plans', c('show_plans')], ['refresh_sec', Math.max(10, Number(v('refresh_sec')) || 30)]];
+    ['show_names', c('show_names')], ['show_prices', c('show_prices')], ['show_plans', c('show_plans')], ['refresh_sec', Math.max(10, Number(v('refresh_sec')) || 30)], ['public_passcode', v('public_passcode')]];
   const capv = rows.find(r => r[0] === 'cap_ratio')[1];
   if (!(capv > 0.5 && capv < 3)) return toast('選配上限請填百分比，例如 110');
   busy(true, '儲存設定…');
   try {
-    const priv = new Set(['over_cap_mode', 'dup_mode', 'merge_cap_mode', 'drive_script_url']);
+    const priv = new Set(['over_cap_mode', 'dup_mode', 'merge_cap_mode', 'drive_script_url', 'public_passcode']);
     const { error } = await sb.from('settings').upsert(rows.map(([key, value]) => ({ key, value, is_public: !priv.has(key) })));
     if (error) throw new Error(error.message);
     const closed = new Set(parse(v('closed')));
