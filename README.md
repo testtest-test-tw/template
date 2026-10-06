@@ -67,7 +67,7 @@ SUPABASE_ANON_KEY: 'eyJ...',
 
 ### 5. 防止資料庫休眠
 
-Supabase 免費專案一週沒人用會暫停。GitHub 專案 **Settings → Secrets and variables → Actions → New repository secret** 新增 `SUPABASE_URL`、`SUPABASE_ANON_KEY`，每天會自動連線一次（`.github/workflows/keepalive.yml`）。
+Supabase 免費專案一週沒人用會暫停。專案內建排程（`.github/workflows/keepalive.yml`）每天會自動連線一次，連線資訊直接讀 `config.js`，不用另外設定。
 
 ### 6. 個案資料
 
